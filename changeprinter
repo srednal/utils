@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# Can be run from something like a launch plist when network
+# changes to switch the default printer.
+
+HOME_SSID=home
+WORK_IP_PREFIX=10.36.3
+
+# Printer queue names, as from lpstat -p
+HOME_PRINTER=Home
+WORK_PRINTER=Work
+
+##########################
+#sleep 2
+
+# check ssid
+SSID=`/System/Library/PrivateFrameworks/Apple80211.framework/Versions/A/Resources/airport -I | grep ' SSID:' | cut -d ':' -f 2 | tr -d ' '`
+WIRE_IP=`ifconfig en0 | grep 'inet ' | cut -d' ' -f 2`
+WLAN_IP=`ifconfig en1 | grep 'inet ' | cut -d' ' -f 2`
+
+case "${WIRE_IP}-${WLAN_IP}-${SSID}" in
+    *-${HOME_SSID})
+        LOCATION="Home by SSID"
+        ;;
+    ${WORK_IP_PREFIX}*-*-*)
+        LOCATION="Work by Wire IP"
+        ;;
+    *)
+        LOCATION="Unknown"
+        ;;
+esac
+
+CURRENT_PRINTER=`lpstat -d | sed -e 's/^[^:]*: *//'`
+
+case ${LOCATION} in
+    Home*)
+        # change printer if not already set to home
+        if [ "${CURRENT_PRINTER}" != "${HOME_PRINTER}" ]; then
+            lpoptions -d ${HOME_PRINTER} > /dev/null
+            `dirname $0`/growlnotify -n `basename $0` -m "Set printer to ${LOCATION}" "Printer Changed"
+        fi
+        ;;
+    Work*)
+        # change printer _only_ if set to home
+        if [ "${CURRENT_PRINTER}" == "${HOME_PRINTER}" ]; then
+            lpoptions -d ${WORK_PRINTER} > /dev/null
+            `dirname $0`/growlnotify -n `basename $0` -m "Set printer to ${LOCATION}" "Printer Changed"
+        fi
+        ;;
+    *)
+        # do nothing
+        ;;
+esac
+
+# growlnotify if we changed a printer
+
+# echo `date` "Location: ${LOCATION} - ${DID}"

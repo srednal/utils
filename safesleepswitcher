@@ -1,0 +1,41 @@
+#!/bin/sh 
+# Switch in and out of safe sleep based on battery life
+# This must be run as root / sudo
+
+# Using launchd:
+# Create /System/Library/LaunchDaemons/com.srednal.safesleepswitcher.plist as:
+#  <?xml version="1.0" encoding="UTF-8"?>
+#  <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+#  <plist version="1.0">
+#  <dict>  
+#      <key>Label</key>
+#      <string>com.srednal.safesleepswitcher</string>
+#      <key>Program</key>
+#      <string>/path/to//safesleepswitcher</string>
+#      <key>StartInterval</key>
+#      <integer>600</integer>  
+#  </dict>
+#  </plist>
+# and reboot (or else launchctl load /System/Library/LaunchDaemons/com.srednal.safesleepswitcher.plist)
+
+# Check current hibernatemode and battery life
+MODE=`pmset -g | grep hibernatemode | awk '{ print $2 }'`
+LIFE=`pmset -g batt | grep Internal | awk '{ print $2 }' | awk -F % '{ print $1 }'`
+HFILE=`pmset -g | grep hibernatefile | awk '{print $2}'`
+
+# uncomment to check that it is actually running...
+# logger -t "safesleepswitcher" "Mode is ${MODE}, battery is ${LIFE}%"
+
+# See man pmset for hibernatemode settings.
+
+if [ $LIFE -lt 30 ] && [ $MODE != 3 ] ; then
+    # battery life < 30%:  Turn on safesleep (back to default mode for laptop)
+    logger -t "safesleepswitcher" "Switching hibernatemode to 3 (safe) with battery at ${LIFE}%"
+    pmset -a hibernatemode 3
+elif  [ $LIFE -gt 50 ] && [ $MODE != 0 ]; then
+	# battery life is over 50%:  Turn safesleep off (faster going to sleep, doesn't save hibernate file)
+    logger -t "safesleepswitcher" "Switching hibernatemode to 0 (fast) with battery at ${LIFE}%"
+    pmset -a hibernatemode 0
+    rm -f ${HFILE}
+fi
+
