@@ -1,0 +1,70 @@
+#!/usr/bin/env ruby
+# Test network and switch locations based on v
+require 'ipaddr'
+
+WORK_IP = '10.135.124.00/23'  # Broomfield office
+
+LOCATIONS = {
+    :vpn => 'Oracle Proxy',
+    :work => 'Oracle Proxy',
+    :home => 'Automatic'
+    }
+
+# see if VPN is connected
+def vpn?
+    vpn = false;
+    IO.popen( '/opt/cisco/vpn/bin/vpn status' ) do |out|
+        out.each do |line|
+            vpn |= line =~ />> state: Connected/
+        end
+    end
+    vpn
+end
+
+# see if the vpn app is running
+def vpn_app?
+    vpn = false
+    `ps -ewwo pid,args`.each do |line| 
+        vpn |= line =~ /Cisco\ AnyConnect\ VPN\ Client\.app/
+    end
+    vpn
+end
+
+# are we on work network
+def work?
+    # Work IP will be within this range
+    IPAddr.new(WORK_IP).include?(local_ip)
+end
+
+# lookup local ip addr
+def local_ip
+  orig, Socket.do_not_reverse_lookup = Socket.do_not_reverse_lookup, true  # turn off reverse DNS resolution temporarily
+  UDPSocket.open do |s|
+    s.connect '74.125.45.99', 1  # IP is anything (not localhost though)
+    s.addr.last
+  end
+ensure
+  Socket.do_not_reverse_lookup = orig
+end
+
+# set network location config
+def select(where)
+    # this seems to be safe if we change Foo -> Foo
+    # at least it doesn't mess up the network connections
+    system "/usr/sbin/scselect '#{LOCATIONS[where]}'"
+end
+
+
+########################################
+
+sleep 5   # let things settle down (assuming launch agent trigger)
+
+case
+    when vpn_app?
+        # when VPN is running, don't change anything - switch manually
+        puts 'VPN is running - switch manually'
+    when work?
+        select :work
+    else
+        select :home
+end
