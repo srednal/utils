@@ -4,6 +4,11 @@ require 'ipaddr'
 
 WORK_IP = '10.135.124.00/23'  # Broomfield office
 
+# don't switch in vpn because it messes up the vpn - have to switch this manually
+SWITCH_LOCATIONS = { :vpn => false, :work => true, :home => true }
+
+USE_PROXY = { :vpn => true, :work => true, :home => false }
+
 LOCATIONS = {
     :vpn => 'Oracle Proxy',
     :work => 'Oracle Proxy',
@@ -49,22 +54,42 @@ end
 
 # set network location config
 def select(where)
-    # this seems to be safe if we change Foo -> Foo
-    # at least it doesn't mess up the network connections
-    system "/usr/sbin/scselect '#{LOCATIONS[where]}'"
+    # when VPN is running, don't change anything - switch manually
+    if SWITCH_LOCATIONS[where]
+        # this seems to be safe if we change Foo -> Foo
+        # at least it doesn't mess up the network connections
+        system "/usr/sbin/scselect '#{LOCATIONS[where]}'"
+    else
+        puts 'Switch locations manually'
+    end
+    # set eclipse proxy
+    set_eclipse(where)
 end
 
+
+def set_eclipse(where)
+    # Rewrite the eclipse proxy setting
+    # This doesn't take effect until you [re]strt eclipse
+    eclipse_net_prefs="#{ENV['HOME']}/lib/eclipse/configuration/.settings/org.eclipse.core.net.prefs"
+    text = File.read(eclipse_net_prefs)
+    File.open(eclipse_net_prefs, "w") { |file|
+        file.puts text.gsub(/^(proxiesEnabled)\s*=.*$/, "\\1=#{USE_PROXY[where]}")
+    }
+    puts 'Set Eclipse network prefs - restart Eclipse'
+end
+
+def location
+    if vpn_app? 
+        :vpn
+    elsif work?
+        :work
+    else
+        :home
+    end
+end
 
 ########################################
 
 sleep 5   # let things settle down (assuming launch agent trigger)
 
-case
-    when vpn_app?
-        # when VPN is running, don't change anything - switch manually
-        puts 'VPN is running - switch manually'
-    when work?
-        select :work
-    else
-        select :home
-end
+select location
