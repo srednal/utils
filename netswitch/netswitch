@@ -62,8 +62,10 @@ def select(where)
     else
         puts 'Switch locations manually'
     end
-    # set eclipse proxy
+    # set eclipse, svn, maven proxies
     set_eclipse(where)
+    set_svn(where)
+    set_mvn(where)
 end
 
 
@@ -76,6 +78,28 @@ def set_eclipse(where)
         file.puts text.gsub(/^(proxiesEnabled)\s*=.*$/, "\\1=#{USE_PROXY[where]}")
     }
     puts 'Set Eclipse network prefs - restart Eclipse'
+end
+
+def set_svn(where)
+    # Rewrite the svn servers setting
+    # This will simply switch the global setting to non-proxy and back
+    svn_server_prefs="#{ENV['HOME']}/.subversion/servers"
+    text = File.read(svn_server_prefs)
+    newGlobal = USE_PROXY[where] ? "[global]" : "[global-noproxy]"
+    File.open(svn_server_prefs, "w") { |file|
+        file.puts text.gsub(/^\[global(-noproxy)?\]\s*$/, newGlobal)
+    }
+end
+
+def set_mvn(where)
+    # Rewrite the maven settings
+    # This will simply switch the proxy active/inactive
+    mvn_server_prefs="#{ENV['HOME']}/.m2/settings.xml"
+    text = File.read(mvn_server_prefs)
+    # TODO this could actually parse the xml looking for <proxies><proxy><active>...
+    File.open(mvn_server_prefs, "w") { |file|
+        file.puts text.gsub(/(<proxy>\s*<active>)\s*(true|false)\s*(<\/active>)/m, "\\1#{USE_PROXY[where]}\\3")
+    }
 end
 
 def location
